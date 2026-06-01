@@ -423,6 +423,8 @@
       };
 
       const grouped = filaments.reduce((acc,f) => { (acc[f.brand]=acc[f.brand]||[]).push(f); return acc; },{});
+      const uniqueBrands = [...new Set(filaments.map(f => f.brand))];
+      const colorsForBrand = [...new Set(filaments.filter(f => f.brand === form.brand).map(f => f.color))];
 
       return (
         <div style={{ display:"flex", flexDirection:"column", gap:24 }} className="fade-up">
@@ -431,9 +433,16 @@
               <Icon name={editId?"edit":"plus"} size={16} />
               <span style={{ fontWeight:700, fontSize:15 }}>{editId?"Editar Filamento":"Agregar Filamento"}</span>
             </div>
+            {/* datalists for autocomplete */}
+            <datalist id="brands-list">
+              {uniqueBrands.map(b => <option key={b} value={b} />)}
+            </datalist>
+            <datalist id="colors-list">
+              {colorsForBrand.map(c => <option key={c} value={c} />)}
+            </datalist>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:14 }}>
-              <div><label className="label">Marca</label><input className="input" placeholder="Ej: Bambu Lab" value={form.brand} onChange={e=>set("brand",e.target.value)} /></div>
-              <div><label className="label">Color</label><input className="input" placeholder="Ej: Rojo, Azul…" value={form.color} onChange={e=>set("color",e.target.value)} /></div>
+              <div><label className="label">Marca</label><input className="input" list="brands-list" placeholder="Ej: Bambu Lab" value={form.brand} onChange={e=>set("brand",e.target.value)} /></div>
+              <div><label className="label">Color</label><input className="input" list="colors-list" placeholder="Ej: Rojo, Azul…" value={form.color} onChange={e=>set("color",e.target.value)} /></div>
               <div>
                 <label className="label">Material</label>
                 <select className="input" value={form.material} onChange={e=>set("material",e.target.value)}>
