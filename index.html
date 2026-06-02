@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content" />
   <meta name="description" content="Cotizador gratuito de impresiones 3D." />
   <title>PrintQuote — Cotizador 3D</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧵</text></svg>" />
@@ -40,7 +40,7 @@
     .pill { display: inline-flex; align-items: center; gap: 6px; background: #1e1e2e; border: 1px solid #2a2a3d; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 500; }
     @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
     .fade-up { animation: fadeUp .35s ease both; }
-    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(14,14,20,.96); backdrop-filter: blur(16px); border-top: 1px solid #1e1e2e; display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom, 4px); }
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(14,14,20,.96); backdrop-filter: blur(16px); border-top: 1px solid #1e1e2e; display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom, 4px); transform: translateZ(0); will-change: transform; }
     .tab-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 8px; background: none; border: none; color: #4a4a6a; font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; transition: color .2s; cursor: pointer; position: relative; }
     .tab-btn.active { color: #a78bfa; }
     .tab-btn .tab-dot { width: 4px; height: 4px; border-radius: 50%; background: #7c6af7; position: absolute; bottom: 6px; opacity: 0; transition: opacity .2s; }
@@ -205,7 +205,7 @@
 
           {/* Ko-fi */}
           <a href="https://ko-fi.com/danzelot" target="_blank" rel="noopener"
-            style={{ position:"fixed", bottom:"calc(80px + env(safe-area-inset-bottom,0px))", right:18, width:42, height:42, borderRadius:"50%", background:"#FF5E5B", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 12px rgba(0,0,0,.35)", zIndex:99, textDecoration:"none", opacity:.85, transition:"opacity .2s,transform .2s", fontSize:20 }}
+            style={{ position:"fixed", bottom:"calc(80px + env(safe-area-inset-bottom,0px))", right:18, width:42, height:42, borderRadius:"50%", background:"#FF5E5B", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 2px 12px rgba(0,0,0,.35)", zIndex:999, textDecoration:"none", opacity:.85, transition:"opacity .2s,transform .2s", fontSize:20, transform:"translateZ(0)" }}
             onMouseEnter={e => { e.currentTarget.style.opacity="1"; e.currentTarget.style.transform="scale(1.1)"; }}
             onMouseLeave={e => { e.currentTarget.style.opacity=".85"; e.currentTarget.style.transform="scale(1)"; }}>
             ☕
@@ -229,16 +229,19 @@
       const [brand, setBrand] = useState("");
       const [filId, setFilId] = useState("");
       const [grams, setGrams] = useState("");
+      const [qty, setQty] = useState("1");
       const [hours, setHours] = useState("");
       const [mins, setMins] = useState("");
-      const [watts, setWatts] = useState("200");
-      const [kwh, setKwh] = useState("2.8");
-      const [waste, setWaste] = useState("10");
-      const [multiplier, setMultiplier] = useState("3");
-      const [clientName, setClientName] = useState("");
+      const [watts, setWatts] = useState(() => localStorage.getItem("pq_watts") || "200");
+      const [kwh, setKwh] = useState(() => localStorage.getItem("pq_kwh") || "2.8");
+      const [waste, setWaste] = useState(() => localStorage.getItem("pq_waste") || "10");
+      const [multiplier, setMultiplier] = useState(() => localStorage.getItem("pq_multiplier") || "3");
       const [pieceName, setPieceName] = useState("");
+      const [clientName, setClientName] = useState("");
+      const [orderItems, setOrderItems] = useState([]);
       const [saved, setSaved] = useState(false);
 
+      const saveSettings = (key, val) => localStorage.setItem(key, val);
       const brandFilaments = filaments.filter(f => f.brand === brand);
       const selectedFil = filaments.find(f => f.id === filId);
 
@@ -251,19 +254,59 @@
       const filamentCost = selectedFil ? (parseFloat(grams)||0) * selectedFil.pricePerGram : 0;
       const energyCost = (parseFloat(watts)||0)/1000 * totalHours * (parseFloat(kwh)||0);
       const wasteFactor = 1 + (parseFloat(waste)||0)/100;
-      const realCost = (filamentCost + energyCost) * wasteFactor;
-      const mult = parseFloat(multiplier) || 1;
-      const salePrice = realCost * mult;
+      const unitRealCost = (filamentCost + energyCost) * wasteFactor;
+      const unitSalePrice = unitRealCost * (parseFloat(multiplier)||1);
+      const qtyNum = Math.max(1, parseInt(qty)||1);
+      const realCost = unitRealCost * qtyNum;
+      const salePrice = unitSalePrice * qtyNum;
       const profit = salePrice - realCost;
-      const hasResult = realCost > 0;
+      const hasResult = unitRealCost > 0;
+
+      const resetPiece = () => { setBrand(""); setFilId(""); setGrams(""); setHours(""); setMins(""); setQty("1"); setPieceName(""); };
+
+      const addToOrder = () => {
+        if (!hasResult) return;
+        const item = {
+          id: uid(),
+          pieceName: pieceName || "Pieza",
+          filament: selectedFil ? `${selectedFil.brand} ${selectedFil.color}` : "—",
+          grams: parseFloat(grams)||0,
+          printTime: `${hours||0}h ${mins||0}m`,
+          qty: qtyNum,
+          unitRealCost, unitSalePrice,
+          realCost, salePrice, profit,
+        };
+        setOrderItems(prev => [...prev, item]);
+        resetPiece();
+      };
+
+      // Order totals
+      const orderRealCost  = orderItems.reduce((s,i) => s + i.realCost,  0);
+      const orderSalePrice = orderItems.reduce((s,i) => s + i.salePrice, 0);
+      const orderProfit    = orderItems.reduce((s,i) => s + i.profit,    0);
+      const hasOrder = orderItems.length > 0;
 
       const handleSave = () => {
-        const entry = { id:uid(), date:new Date().toISOString(), clientName, pieceName,
-          filament: selectedFil ? `${selectedFil.brand} ${selectedFil.color}` : "—",
-          grams: parseFloat(grams)||0, printTime:`${hours||0}h ${mins||0}m`,
-          realCost, salePrice, profit, multiplier:parseFloat(multiplier) };
+        const isSinglePiece = !hasOrder;
+        const entry = {
+          id: uid(),
+          date: new Date().toISOString(),
+          clientName,
+          // single piece fields (for backward compat)
+          pieceName: isSinglePiece ? (pieceName||"Sin nombre") : `Pedido (${orderItems.length} piezas)`,
+          filament: isSinglePiece ? (selectedFil ? `${selectedFil.brand} ${selectedFil.color}` : "—") : "Múltiples",
+          grams: isSinglePiece ? (parseFloat(grams)||0)*qtyNum : orderItems.reduce((s,i)=>s+i.grams*i.qty,0),
+          printTime: isSinglePiece ? `${hours||0}h ${mins||0}m` : `${orderItems.length} piezas`,
+          realCost:  isSinglePiece ? realCost  : orderRealCost,
+          salePrice: isSinglePiece ? salePrice : orderSalePrice,
+          profit:    isSinglePiece ? profit    : orderProfit,
+          multiplier: parseFloat(multiplier),
+          // order items (only for multi-piece)
+          items: isSinglePiece ? null : orderItems,
+        };
         persistHistory([entry, ...history]);
-        setSaved(true); setTimeout(() => setSaved(false), 2000);
+        setSaved(true);
+        setTimeout(() => { setSaved(false); setOrderItems([]); setClientName(""); resetPiece(); }, 2000);
       };
 
       const Row = ({ label, value, accent }) => (
@@ -273,8 +316,17 @@
         </div>
       );
 
+      const PRESETS = [
+        {label:"Amigos",value:"2",color:"#7cf7b0",desc:"×2"},
+        {label:"Mayorista",value:"2.5",color:"#6c9af7",desc:"×2.5"},
+        {label:"Minorista",value:"3",color:"#7c6af7",desc:"×3"},
+        {label:"Urgente",value:"4",color:"#f7c97c",desc:"×4"},
+      ];
+
       return (
         <div style={{ display:"flex", flexDirection:"column", gap:24 }} className="fade-up">
+
+          {/* Filament selector */}
           <div className="card">
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
               <Icon name="spool" size={16} /><span style={{ fontWeight:700, fontSize:15 }}>Seleccionar Filamento</span>
@@ -308,20 +360,22 @@
             )}
           </div>
 
+          {/* Print params */}
           <div className="card">
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
               <Icon name="clock" size={16} /><span style={{ fontWeight:700, fontSize:15 }}>Parámetros de Impresión</span>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, alignItems:"end" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, alignItems:"end" }}>
               <div><label className="label">Filamento (g)</label><input className="input" type="number" min="0" placeholder="0" value={grams} onChange={e => setGrams(e.target.value)} /></div>
-              <div><label className="label">Tiempo — Horas</label><input className="input" type="number" min="0" placeholder="0" value={hours} onChange={e => setHours(e.target.value)} /></div>
-              <div><label className="label">Tiempo — Minutos</label><input className="input" type="number" min="0" max="59" placeholder="0" value={mins} onChange={e => setMins(e.target.value)} /></div>
+              <div><label className="label">Horas</label><input className="input" type="number" min="0" placeholder="0" value={hours} onChange={e => setHours(e.target.value)} /></div>
+              <div><label className="label">Minutos</label><input className="input" type="number" min="0" max="59" placeholder="0" value={mins} onChange={e => setMins(e.target.value)} /></div>
+              <div><label className="label">Cantidad</label><input className="input" type="number" min="1" placeholder="1" value={qty} onChange={e => setQty(e.target.value)} /></div>
             </div>
             <details style={{ marginTop:18 }}>
               <summary style={{ fontSize:12, color:"#6c6c8a", cursor:"pointer", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>Parámetros avanzados</summary>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:16, alignItems:"end" }}>
-                <div><label className="label">Consumo equipo (W)</label><input className="input" type="number" min="0" value={watts} onChange={e => setWatts(e.target.value)} /></div>
-                <div><label className="label">Costo kWh ($)</label><input className="input" type="number" min="0" step="0.01" value={kwh} onChange={e => setKwh(e.target.value)} /></div>
+                <div><label className="label">Consumo equipo (W)</label><input className="input" type="number" min="0" value={watts} onChange={e => { setWatts(e.target.value); saveSettings("pq_watts", e.target.value); }} /></div>
+                <div><label className="label">Costo kWh ($)</label><input className="input" type="number" min="0" step="0.01" value={kwh} onChange={e => { setKwh(e.target.value); saveSettings("pq_kwh", e.target.value); }} /></div>
                 <div style={{ gridColumn:"1 / -1" }}>
                   <label className="label" style={{ display:"flex", justifyContent:"space-between" }}>
                     <span>% Merma / Fallas</span>
@@ -329,7 +383,7 @@
                   </label>
                   <div className="input" style={{ display:"flex", alignItems:"center", gap:8, padding:"0 14px" }}>
                     <span style={{ fontSize:11, color:"#6c6c8a", flexShrink:0 }}>0%</span>
-                    <input type="range" min="0" max="30" value={waste} onChange={e => setWaste(e.target.value)} style={{ flex:1, accentColor:"#7c6af7", cursor:"pointer" }} />
+                    <input type="range" min="0" max="30" value={waste} onChange={e => { setWaste(e.target.value); saveSettings("pq_waste", e.target.value); }} style={{ flex:1, accentColor:"#7c6af7", cursor:"pointer" }} />
                     <span style={{ fontSize:11, color:"#6c6c8a", flexShrink:0 }}>30%</span>
                   </div>
                 </div>
@@ -337,16 +391,21 @@
             </details>
           </div>
 
+          {/* Cost result for current piece */}
           {hasResult && (
             <div className="card fade-up" style={{ borderColor:"#2a2a4d" }}>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-                <Icon name="zap" size={16} /><span style={{ fontWeight:700, fontSize:15 }}>Costos</span>
+                <Icon name="zap" size={16} /><span style={{ fontWeight:700, fontSize:15 }}>Costos{qtyNum > 1 ? ` (×${qtyNum} piezas)` : ""}</span>
               </div>
-              <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:20 }}>Desglose detallado de la impresión</p>
-              <Row label="Costo de filamento" value={fmt(filamentCost)} />
-              <Row label="Costo de energía eléctrica" value={fmt(energyCost)} />
-              <Row label={`Merma aplicada (${waste}%)`} value={fmt((filamentCost+energyCost)*(parseFloat(waste)/100))} />
-              <Row label="Costo real total" value={fmt(realCost)} accent="#a78bfa" />
+              <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:20 }}>Desglose de la pieza actual</p>
+              {qtyNum > 1 && <Row label="Costo unitario filamento" value={fmt(filamentCost)} />}
+              {qtyNum > 1 && <Row label="Costo unitario energía" value={fmt(energyCost)} />}
+              <Row label={qtyNum>1?"Costo real unitario":"Costo de filamento"} value={fmt(qtyNum>1?unitRealCost:filamentCost)} />
+              {qtyNum === 1 && <Row label="Costo de energía eléctrica" value={fmt(energyCost)} />}
+              {qtyNum === 1 && <Row label={`Merma aplicada (${waste}%)`} value={fmt((filamentCost+energyCost)*(parseFloat(waste)/100))} />}
+              <Row label={qtyNum>1?`Costo real total (×${qtyNum})`:"Costo real total"} value={fmt(realCost)} accent="#a78bfa" />
+
+              {/* Multiplier / sale price */}
               <div style={{ marginTop:24, background:"#1a1a2e", borderRadius:12, padding:20 }}>
                 <div style={{ marginBottom:14 }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
@@ -356,41 +415,28 @@
                       <span style={{ fontSize:11, color:"#6c6c8a", display:"block" }}>sobre costo real</span>
                     </div>
                   </div>
-                  {/* Presets */}
                   <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-                    {[
-                      {label:"Amigos",value:"2",color:"#7cf7b0",desc:"×2"},
-                      {label:"Mayorista",value:"2.5",color:"#6c9af7",desc:"×2.5"},
-                      {label:"Minorista",value:"3",color:"#7c6af7",desc:"×3"},
-                      {label:"Urgente",value:"4",color:"#f7c97c",desc:"×4"},
-                    ].map(p => (
-                      <button key={p.label} onClick={() => setMultiplier(p.value)}
+                    {PRESETS.map(p => (
+                      <button key={p.label} onClick={() => { setMultiplier(p.value); saveSettings("pq_multiplier", p.value); }}
                         style={{ flex:1, minWidth:60, padding:"8px 4px", borderRadius:8,
                           border:`1.5px solid ${parseFloat(multiplier)===parseFloat(p.value) ? p.color : "#2a2a3d"}`,
                           background: parseFloat(multiplier)===parseFloat(p.value) ? p.color+"22" : "transparent",
                           color: parseFloat(multiplier)===parseFloat(p.value) ? p.color : "#6c6c8a",
                           fontSize:10, fontWeight:700, fontFamily:"inherit", cursor:"pointer", transition:"all .2s", lineHeight:1.4 }}>
-                        {p.label}<br/>
-                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:11 }}>{p.desc}</span>
+                        {p.label}<br/><span style={{ fontFamily:"'Space Mono',monospace", fontSize:11 }}>{p.desc}</span>
                       </button>
                     ))}
                   </div>
-                  {/* Slider x1.2 → x6 */}
-                  <input type="range" min="1.2" max="6" step="0.1" value={multiplier} onChange={e => setMultiplier(e.target.value)}
+                  <input type="range" min="1.2" max="6" step="0.1" value={multiplier}
+                    onChange={e => { setMultiplier(e.target.value); saveSettings("pq_multiplier", e.target.value); }}
                     style={{ width:"100%", accentColor:"#7c6af7", cursor:"pointer" }} />
-                  {/* Range markers */}
-                  <div style={{ position:"relative", height:28, marginTop:4 }}>
-                    {[
-                      {val:2,label:"Amigos",color:"#7cf7b0"},
-                      {val:2.5,label:"Mayorista",color:"#6c9af7"},
-                      {val:3,label:"Minorista",color:"#7c6af7"},
-                      {val:4,label:"Urgente",color:"#f7c97c"},
-                    ].map(m => {
-                      const left = ((m.val - 1.2) / (6 - 1.2)) * 100;
+                  <div style={{ position:"relative", height:44, marginTop:4 }}>
+                    {[{val:2,label:"Amigos",color:"#7cf7b0",row:0},{val:2.5,label:"Mayorista",color:"#6c9af7",row:1},{val:3,label:"Minorista",color:"#7c6af7",row:0},{val:4,label:"Urgente",color:"#f7c97c",row:1}].map(m => {
+                      const left = ((m.val-1.2)/(6-1.2))*100;
                       return (
-                        <div key={m.val} style={{ position:"absolute", left:`${left}%`, transform:"translateX(-50%)", textAlign:"center", pointerEvents:"none" }}>
-                          <div style={{ width:1, height:5, background:m.color+"88", margin:"0 auto 2px" }} />
-                          <span style={{ fontSize:9, color:m.color+"99", whiteSpace:"nowrap", fontWeight:700 }}>{m.label}</span>
+                        <div key={m.val} style={{ position:"absolute", left:`${left}%`, top:m.row===0?0:20, transform:"translateX(-50%)", textAlign:"center", pointerEvents:"none" }}>
+                          <div style={{ width:1, height:4, background:m.color+"88", margin:"0 auto 2px" }} />
+                          <span style={{ fontSize:9, color:m.color+"cc", whiteSpace:"nowrap", fontWeight:700 }}>{m.label}</span>
                         </div>
                       );
                     })}
@@ -398,8 +444,9 @@
                 </div>
                 <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
                   <div style={{ flex:1, minWidth:120, background:"#0e0e14", borderRadius:10, padding:"14px 18px" }}>
-                    <div className="label" style={{ marginBottom:6 }}>Precio venta</div>
+                    <div className="label" style={{ marginBottom:6 }}>Precio venta{qtyNum>1?` ×${qtyNum}`:""}</div>
                     <div style={{ fontFamily:"'Space Mono',monospace", fontSize:22, color:"#7cf7b0", fontWeight:700 }}>{fmt(salePrice)}</div>
+                    {qtyNum>1 && <div style={{ fontSize:11, color:"#6c6c8a", marginTop:4 }}>Unitario: {fmt(unitSalePrice)}</div>}
                   </div>
                   <div style={{ flex:1, minWidth:120, background:"#0e0e14", borderRadius:10, padding:"14px 18px" }}>
                     <div className="label" style={{ marginBottom:6 }}>Ganancia neta</div>
@@ -407,18 +454,91 @@
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop:20, paddingTop:20, borderTop:"1px solid #1e1e2e" }}>
-                <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:14 }}>Guardar en historial (opcional)</p>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
-                  <input className="input" placeholder="Nombre del cliente" value={clientName} onChange={e => setClientName(e.target.value)} />
-                  <input className="input" placeholder="Descripción de la pieza" value={pieceName} onChange={e => setPieceName(e.target.value)} />
-                </div>
-                <button className="btn btn-primary" onClick={handleSave} disabled={saved} style={{ background:saved?"#2a4a3a":undefined }}>
-                  {saved ? <><Icon name="check" size={15} /> Guardado</> : <><Icon name="save" size={15} /> Guardar cotización</>}
+
+              {/* Actions: add to order OR save single */}
+              <div style={{ marginTop:20, paddingTop:20, borderTop:"1px solid #1e1e2e", display:"flex", flexDirection:"column", gap:12 }}>
+                <input className="input" placeholder="Nombre de la pieza (opcional)" value={pieceName} onChange={e => setPieceName(e.target.value)} />
+                <button className="btn btn-ghost" style={{ width:"100%", justifyContent:"center" }} onClick={addToOrder}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  Agregar al pedido{hasOrder ? ` (${orderItems.length} pieza${orderItems.length!==1?"s":""})` : ""}
                 </button>
               </div>
             </div>
           )}
+
+          {/* Order summary */}
+          {hasOrder && (
+            <div className="card fade-up" style={{ borderColor:"#2a4a2a" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <Icon name="history" size={16} />
+                  <span style={{ fontWeight:700, fontSize:15 }}>Pedido</span>
+                  <span className="pill" style={{ fontSize:11 }}>{orderItems.reduce((s,i)=>s+i.qty,0)} pieza{orderItems.reduce((s,i)=>s+i.qty,0)!==1?"s":""}</span>
+                </div>
+                <button onClick={() => setOrderItems([])}
+                  style={{ background:"none", border:"none", color:"#6c6c8a", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>
+                  Limpiar
+                </button>
+              </div>
+
+              {/* Item list */}
+              <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+                {orderItems.map((item,i) => (
+                  <div key={item.id} style={{ display:"flex", alignItems:"center", gap:10, background:"#0e0e14", borderRadius:10, padding:"10px 14px" }}>
+                    <div style={{ flex:1 }}>
+                      <span style={{ fontWeight:600, fontSize:13 }}>{item.pieceName}</span>
+                      <span style={{ fontSize:11, color:"#6c6c8a", marginLeft:8 }}>{item.filament}</span>
+                      {item.qty > 1 && <span style={{ fontSize:11, color:"#a78bfa", marginLeft:6 }}>×{item.qty}</span>}
+                    </div>
+                    <div style={{ textAlign:"right", marginRight:8 }}>
+                      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:13, color:"#7cf7b0" }}>{fmt(item.salePrice)}</div>
+                      <div style={{ fontSize:10, color:"#6c6c8a" }}>costo {fmt(item.realCost)}</div>
+                    </div>
+                    <button onClick={() => setOrderItems(prev => prev.filter(x=>x.id!==item.id))}
+                      style={{ background:"none", border:"none", color:"#6c6c8a", cursor:"pointer", padding:"4px" }}>
+                      <Icon name="x" size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order totals */}
+              <div style={{ background:"#1a2a1a", borderRadius:10, padding:"14px 16px", marginBottom:16 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                  <span style={{ fontSize:13, color:"#6c6c8a" }}>Total costo real</span>
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:14, color:"#a78bfa" }}>{fmt(orderRealCost)}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                  <span style={{ fontSize:13, color:"#6c6c8a" }}>Total precio venta</span>
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:16, color:"#7cf7b0", fontWeight:700 }}>{fmt(orderSalePrice)}</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:13, color:"#6c6c8a" }}>Ganancia total</span>
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:16, color:"#f7c97c", fontWeight:700 }}>{fmt(orderProfit)}</span>
+                </div>
+              </div>
+
+              {/* Save order */}
+              <input className="input" placeholder="Nombre del cliente (opcional)" value={clientName} onChange={e => setClientName(e.target.value)} style={{ marginBottom:12 }} />
+              <button className="btn btn-primary" style={{ width:"100%", justifyContent:"center" }} onClick={handleSave} disabled={saved}
+                style={{ width:"100%", justifyContent:"center", background:saved?"#2a4a3a":"#7c6af7" }}>
+                {saved ? <><Icon name="check" size={15} /> Pedido guardado</> : <><Icon name="save" size={15} /> Guardar pedido en historial</>}
+              </button>
+            </div>
+          )}
+
+          {/* Save single piece (when no order items) */}
+          {hasResult && !hasOrder && (
+            <div className="card" style={{ padding:"16px 20px" }}>
+              <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:12 }}>O guarda esta pieza directamente</p>
+              <input className="input" placeholder="Nombre del cliente (opcional)" value={clientName} onChange={e => setClientName(e.target.value)} style={{ marginBottom:12 }} />
+              <button className="btn btn-primary" onClick={handleSave} disabled={saved}
+                style={{ background:saved?"#2a4a3a":"#7c6af7" }}>
+                {saved ? <><Icon name="check" size={15} /> Guardado</> : <><Icon name="save" size={15} /> Guardar cotización</>}
+              </button>
+            </div>
+          )}
+
         </div>
       );
     }
@@ -614,15 +734,27 @@
             <div key={h.id} className="card">
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6, flexWrap:"wrap" }}>
                     <span style={{ fontWeight:700, fontSize:15 }}>{h.pieceName||"Sin nombre"}</span>
                     {h.clientName && <span className="pill" style={{ fontSize:11 }}>{h.clientName}</span>}
+                    {h.items && <span className="pill" style={{ fontSize:11, borderColor:"#2a4a2a", color:"#7cf7b0" }}>Pedido</span>}
                   </div>
-                  <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:14 }}>
+                  <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:12 }}>
                     {new Date(h.date).toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}
-                    {" · "}{h.filament}{" · "}{h.grams}g{" · "}{h.printTime}
+                    {" · "}{h.filament}{" · "}{h.grams}g
                   </p>
-                  <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+                  {/* Order items breakdown */}
+                  {h.items && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
+                      {h.items.map(item => (
+                        <div key={item.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, padding:"4px 10px", background:"#0e0e14", borderRadius:7 }}>
+                          <span style={{ color:"#9090b0" }}>{item.qty>1?`×${item.qty} `:""}{ item.pieceName} <span style={{ color:"#4a4a6a" }}>· {item.filament}</span></span>
+                          <span style={{ fontFamily:"'Space Mono',monospace", color:"#7cf7b0" }}>{fmt(item.salePrice)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
                     <div><div className="label" style={{ fontSize:10 }}>Costo real</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#a78bfa" }}>{fmt(h.realCost)}</div></div>
                     <div><div className="label" style={{ fontSize:10 }}>Precio venta</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#7cf7b0" }}>{fmt(h.salePrice)}</div></div>
                     <div><div className="label" style={{ fontSize:10 }}>Ganancia</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#f7c97c" }}>{fmt(h.profit)}</div></div>
