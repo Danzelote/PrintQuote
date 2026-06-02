@@ -5,7 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content" />
   <meta name="description" content="Cotizador gratuito de impresiones 3D." />
   <title>PrintQuote — Cotizador 3D</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧵</text></svg>" />
+
+  <!-- Favicon y PWA icons -->
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/Danzelote/PrintQuote/22b837072322f8417a7d16a4aa3becb5f697d337/PrintQuote%20Icon.png" />
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Danzelote/PrintQuote/22b837072322f8417a7d16a4aa3becb5f697d337/PrintQuote%20Icon.png" />
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PrintQuote" />
+  <meta name="theme-color" content="#0e0e14" />
+
+  <!-- Open Graph (preview al compartir) -->
+  <meta property="og:title" content="PrintQuote — Cotizador 3D" />
+  <meta property="og:description" content="Cotizador gratuito de impresiones 3D. Calcula costos, márgenes y gestiona tu catálogo de filamentos." />
+  <meta property="og:image" content="https://raw.githubusercontent.com/Danzelote/PrintQuote/22b837072322f8417a7d16a4aa3becb5f697d337/PrintQuote%20Icon.png" />
+  <meta property="og:type" content="website" />
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-WL5R58BDP4"></script>
   <script>
@@ -125,9 +140,7 @@
           <header style={{ borderBottom:"1px solid #1e1e2e", padding:"0 24px" }}>
             <div style={{ maxWidth:820, margin:"0 auto", display:"flex", alignItems:"center", height:56 }}>
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:30, height:30, background:"linear-gradient(135deg,#7c6af7,#a78bfa)", borderRadius:8, display:"grid", placeItems:"center" }}>
-                  <Icon name="spool" size={15} />
-                </div>
+                <img src="https://raw.githubusercontent.com/Danzelote/PrintQuote/22b837072322f8417a7d16a4aa3becb5f697d337/PrintQuote%20Icon.png" alt="PrintQuote" style={{ width:34, height:34, borderRadius:8, objectFit:"cover" }} />
                 <span style={{ fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:14, letterSpacing:"-.02em" }}>
                   PRINT<span style={{ color:"#7c6af7" }}>QUOTE</span>
                 </span>
@@ -166,9 +179,7 @@
                   <Icon name="x" size={14} />
                 </button>
                 <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-                  <div style={{ width:40, height:40, background:"linear-gradient(135deg,#7c6af7,#a78bfa)", borderRadius:10, display:"grid", placeItems:"center" }}>
-                    <Icon name="spool" size={20} />
-                  </div>
+                  <img src="https://raw.githubusercontent.com/Danzelote/PrintQuote/22b837072322f8417a7d16a4aa3becb5f697d337/PrintQuote%20Icon.png" alt="PrintQuote" style={{ width:48, height:48, borderRadius:12, objectFit:"cover" }} />
                   <div>
                     <div style={{ fontFamily:"'Space Mono',monospace", fontWeight:700, fontSize:15 }}>PRINT<span style={{ color:"#7c6af7" }}>QUOTE</span></div>
                     <div style={{ fontSize:11, color:"#6c6c8a" }}>Cotizador de impresión 3D</div>
