@@ -233,8 +233,8 @@
       const [mins, setMins] = useState("");
       const [watts, setWatts] = useState("200");
       const [kwh, setKwh] = useState("2.8");
-      const [waste, setWaste] = useState("7");
-      const [margin, setMargin] = useState("40");
+      const [waste, setWaste] = useState("10");
+      const [multiplier, setMultiplier] = useState("3");
       const [clientName, setClientName] = useState("");
       const [pieceName, setPieceName] = useState("");
       const [saved, setSaved] = useState(false);
@@ -252,7 +252,8 @@
       const energyCost = (parseFloat(watts)||0)/1000 * totalHours * (parseFloat(kwh)||0);
       const wasteFactor = 1 + (parseFloat(waste)||0)/100;
       const realCost = (filamentCost + energyCost) * wasteFactor;
-      const salePrice = realCost / (1 - (parseFloat(margin)||0)/100);
+      const mult = parseFloat(multiplier) || 1;
+      const salePrice = realCost * mult;
       const profit = salePrice - realCost;
       const hasResult = realCost > 0;
 
@@ -260,7 +261,7 @@
         const entry = { id:uid(), date:new Date().toISOString(), clientName, pieceName,
           filament: selectedFil ? `${selectedFil.brand} ${selectedFil.color}` : "—",
           grams: parseFloat(grams)||0, printTime:`${hours||0}h ${mins||0}m`,
-          realCost, salePrice, profit, margin:parseFloat(margin) };
+          realCost, salePrice, profit, multiplier:parseFloat(multiplier) };
         persistHistory([entry, ...history]);
         setSaved(true); setTimeout(() => setSaved(false), 2000);
       };
@@ -347,12 +348,52 @@
               <Row label={`Merma aplicada (${waste}%)`} value={fmt((filamentCost+energyCost)*(parseFloat(waste)/100))} />
               <Row label="Costo real total" value={fmt(realCost)} accent="#a78bfa" />
               <div style={{ marginTop:24, background:"#1a1a2e", borderRadius:12, padding:20 }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:12 }}>
-                  <span style={{ fontWeight:700, fontSize:15 }}>Precio de Venta</span>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <label className="label" style={{ margin:0 }}>Margen %</label>
-                    <input type="range" min="5" max="90" value={margin} onChange={e => setMargin(e.target.value)} style={{ width:100, accentColor:"#7c6af7" }} />
-                    <span style={{ fontFamily:"'Space Mono',monospace", fontSize:14, minWidth:36, color:"#a78bfa" }}>{margin}%</span>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                    <span style={{ fontWeight:700, fontSize:15 }}>Precio de Venta</span>
+                    <div style={{ textAlign:"right" }}>
+                      <span style={{ fontFamily:"'Space Mono',monospace", fontSize:20, color:"#a78bfa", fontWeight:700 }}>×{parseFloat(multiplier).toFixed(1)}</span>
+                      <span style={{ fontSize:11, color:"#6c6c8a", display:"block" }}>sobre costo real</span>
+                    </div>
+                  </div>
+                  {/* Presets */}
+                  <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+                    {[
+                      {label:"Amigos",value:"2",color:"#7cf7b0",desc:"×2"},
+                      {label:"Mayorista",value:"2.5",color:"#6c9af7",desc:"×2.5"},
+                      {label:"Minorista",value:"3",color:"#7c6af7",desc:"×3"},
+                      {label:"Urgente",value:"4",color:"#f7c97c",desc:"×4"},
+                    ].map(p => (
+                      <button key={p.label} onClick={() => setMultiplier(p.value)}
+                        style={{ flex:1, minWidth:60, padding:"8px 4px", borderRadius:8,
+                          border:`1.5px solid ${parseFloat(multiplier)===parseFloat(p.value) ? p.color : "#2a2a3d"}`,
+                          background: parseFloat(multiplier)===parseFloat(p.value) ? p.color+"22" : "transparent",
+                          color: parseFloat(multiplier)===parseFloat(p.value) ? p.color : "#6c6c8a",
+                          fontSize:10, fontWeight:700, fontFamily:"inherit", cursor:"pointer", transition:"all .2s", lineHeight:1.4 }}>
+                        {p.label}<br/>
+                        <span style={{ fontFamily:"'Space Mono',monospace", fontSize:11 }}>{p.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {/* Slider x1.2 → x6 */}
+                  <input type="range" min="1.2" max="6" step="0.1" value={multiplier} onChange={e => setMultiplier(e.target.value)}
+                    style={{ width:"100%", accentColor:"#7c6af7", cursor:"pointer" }} />
+                  {/* Range markers */}
+                  <div style={{ position:"relative", height:28, marginTop:4 }}>
+                    {[
+                      {val:2,label:"Amigos",color:"#7cf7b0"},
+                      {val:2.5,label:"Mayorista",color:"#6c9af7"},
+                      {val:3,label:"Minorista",color:"#7c6af7"},
+                      {val:4,label:"Urgente",color:"#f7c97c"},
+                    ].map(m => {
+                      const left = ((m.val - 1.2) / (6 - 1.2)) * 100;
+                      return (
+                        <div key={m.val} style={{ position:"absolute", left:`${left}%`, transform:"translateX(-50%)", textAlign:"center", pointerEvents:"none" }}>
+                          <div style={{ width:1, height:5, background:m.color+"88", margin:"0 auto 2px" }} />
+                          <span style={{ fontSize:9, color:m.color+"99", whiteSpace:"nowrap", fontWeight:700 }}>{m.label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
@@ -585,7 +626,7 @@
                     <div><div className="label" style={{ fontSize:10 }}>Costo real</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#a78bfa" }}>{fmt(h.realCost)}</div></div>
                     <div><div className="label" style={{ fontSize:10 }}>Precio venta</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#7cf7b0" }}>{fmt(h.salePrice)}</div></div>
                     <div><div className="label" style={{ fontSize:10 }}>Ganancia</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15, color:"#f7c97c" }}>{fmt(h.profit)}</div></div>
-                    <div><div className="label" style={{ fontSize:10 }}>Margen</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15 }}>{h.margin}%</div></div>
+                    <div><div className="label" style={{ fontSize:10 }}>Multiplicador</div><div style={{ fontFamily:"'Space Mono',monospace", fontSize:15 }}>×{h.multiplier||"-"}</div></div>
                   </div>
                 </div>
                 <button className="btn btn-danger" style={{ padding:"7px 12px", flexShrink:0 }} onClick={()=>del(h.id)}><Icon name="trash" size={14} /></button>
