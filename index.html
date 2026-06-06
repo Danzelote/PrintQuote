@@ -288,15 +288,31 @@
       const [kwh, setKwh] = useState(() => localStorage.getItem("pq_kwh") || "2.8");
       const [waste, setWaste] = useState(() => localStorage.getItem("pq_waste") || "10");
       const [multiplier, setMultiplier] = useState(() => localStorage.getItem("pq_multiplier") || "3");
+      // Machine cost state
+      const [printerCost, setPrinterCost] = useState(() => localStorage.getItem("pq_printer_cost") || "15000");
+      const [extraCost, setExtraCost] = useState(() => localStorage.getItem("pq_extra_cost") || "0");
+      const [maintenance, setMaintenance] = useState(() => localStorage.getItem("pq_maintenance") || "1500");
+      const [printerLife, setPrinterLife] = useState(() => localStorage.getItem("pq_printer_life") || "5");
+      const [activeTime, setActiveTime] = useState(() => localStorage.getItem("pq_active_time") || "50");
+      const [bufferFactor, setBufferFactor] = useState(() => localStorage.getItem("pq_buffer") || "1.3");
+      const [laborRate, setLaborRate] = useState(() => localStorage.getItem("pq_labor") || "0");
       const [saved, setSaved] = useState(false);
 
       const saveSettings = (key, val) => localStorage.setItem(key, val);
       const brandFilaments = filaments.filter(f => f.brand === brand);
       const selectedFil = filaments.find(f => f.id === filId);
 
+      // Only auto-select color when user manually changes brand (not when loading from history)
+      const prevBrand = React.useRef(brand);
       useEffect(() => {
-        if (brandFilaments.length === 1) setFilId(brandFilaments[0].id);
-        else setFilId("");
+        if (prevBrand.current === brand) return; // brand didn't actually change
+        prevBrand.current = brand;
+        // Only reset filId if the current filId doesn't belong to this brand
+        const belongs = brandFilaments.some(f => f.id === filId);
+        if (!belongs) {
+          if (brandFilaments.length === 1) setFilId(brandFilaments[0].id);
+          else setFilId("");
+        }
       }, [brand]);
 
       // Load from history
@@ -326,7 +342,19 @@
       const filamentCost = selectedFil ? (parseFloat(grams)||0) * selectedFil.pricePerGram : 0;
       const energyCost = (parseFloat(watts)||0)/1000 * totalHours * (parseFloat(kwh)||0);
       const wasteFactor = 1 + (parseFloat(waste)||0)/100;
-      const unitRealCost = (filamentCost + energyCost) * wasteFactor;
+      // Machine cost per hour
+      const totalInvestment = (parseFloat(printerCost)||0) + (parseFloat(extraCost)||0);
+      const annualMaintenance = parseFloat(maintenance)||0;
+      const lifeYears = parseFloat(printerLife)||5;
+      const activePercent = (parseFloat(activeTime)||50)/100;
+      const hoursPerYear = 8760 * activePercent;
+      const totalHoursLife = hoursPerYear * lifeYears;
+      const depreciationPerHr = totalHoursLife > 0 ? totalInvestment / totalHoursLife : 0;
+      const maintenancePerHr = hoursPerYear > 0 ? annualMaintenance / hoursPerYear : 0;
+      const machineHrCost = (depreciationPerHr + maintenancePerHr) * (parseFloat(bufferFactor)||1);
+      const machineCost = machineHrCost * totalHours;
+      const laborCost = (parseFloat(laborRate)||0) * totalHours;
+      const unitRealCost = (filamentCost + energyCost + machineCost + laborCost) * wasteFactor;
       const unitSalePrice = unitRealCost * (parseFloat(multiplier)||1);
       const qtyNum = Math.max(1, parseInt(qty)||1);
       const realCost = unitRealCost * qtyNum;
@@ -445,10 +473,15 @@
             </div>
             <details style={{ marginTop:18 }}>
               <summary style={{ fontSize:12, color:"#6c6c8a", cursor:"pointer", fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>Parámetros avanzados</summary>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:16, alignItems:"end" }}>
-                <div><label className="label">Consumo equipo (W)</label><input className="input" type="number" min="0" value={watts} inputMode="decimal" onChange={e => { setWatts(e.target.value); saveSettings("pq_watts", e.target.value); }} /></div>
-                <div><label className="label">Costo kWh ($)</label><input className="input" type="number" min="0" step="0.01" value={kwh} inputMode="decimal" onChange={e => { setKwh(e.target.value); saveSettings("pq_kwh", e.target.value); }} /></div>
-                <div style={{ gridColumn:"1 / -1" }}>
+              <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:16 }}>
+
+                {/* Energy */}
+                <div style={{ fontSize:11, fontWeight:700, color:"#4a4a6a", textTransform:"uppercase", letterSpacing:".06em", borderBottom:"1px solid #1e1e2e", paddingBottom:6 }}>⚡ Energía</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, alignItems:"end" }}>
+                  <div><label className="label">Consumo equipo (W)</label><input className="input" type="number" inputMode="decimal" min="0" value={watts} onChange={e => { setWatts(e.target.value); saveSettings("pq_watts", e.target.value); }} /></div>
+                  <div><label className="label">Costo kWh ($)</label><input className="input" type="number" inputMode="decimal" min="0" step="0.01" value={kwh} onChange={e => { setKwh(e.target.value); saveSettings("pq_kwh", e.target.value); }} /></div>
+                </div>
+                <div>
                   <label className="label" style={{ display:"flex", justifyContent:"space-between" }}>
                     <span>% Merma / Fallas</span>
                     <span style={{ fontFamily:"'Space Mono',monospace", color:"#a78bfa" }}>{waste}%</span>
@@ -459,6 +492,50 @@
                     <span style={{ fontSize:11, color:"#6c6c8a", flexShrink:0 }}>30%</span>
                   </div>
                 </div>
+
+                {/* Machine cost */}
+                <div style={{ fontSize:11, fontWeight:700, color:"#4a4a6a", textTransform:"uppercase", letterSpacing:".06em", borderBottom:"1px solid #1e1e2e", paddingBottom:6, marginTop:4 }}>🖨️ Desgaste de la impresora</div>
+                <div style={{ background:"#0e0e14", borderRadius:10, padding:"10px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#6c6c8a" }}>Costo/hora de máquina calculado</span>
+                  <span style={{ fontFamily:"'Space Mono',monospace", fontSize:14, color: machineHrCost > 0 ? "#f7c97c" : "#3a3a55" }}>{fmt(machineHrCost)}/hr</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, alignItems:"end" }}>
+                  <div><label className="label">Costo impresora ($)</label><input className="input" type="number" inputMode="decimal" min="0" value={printerCost} onChange={e => { setPrinterCost(e.target.value); saveSettings("pq_printer_cost", e.target.value); }} /></div>
+                  <div><label className="label">Extras / accesorios ($)</label><input className="input" type="number" inputMode="decimal" min="0" value={extraCost} onChange={e => { setExtraCost(e.target.value); saveSettings("pq_extra_cost", e.target.value); }} /></div>
+                  <div><label className="label">Mantenimiento anual ($)</label><input className="input" type="number" inputMode="decimal" min="0" value={maintenance} onChange={e => { setMaintenance(e.target.value); saveSettings("pq_maintenance", e.target.value); }} /></div>
+                  <div><label className="label">Vida estimada (años)</label><input className="input" type="number" inputMode="decimal" min="1" max="20" value={printerLife} onChange={e => { setPrinterLife(e.target.value); saveSettings("pq_printer_life", e.target.value); }} /></div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, alignItems:"end" }}>
+                  <div>
+                    <label className="label" style={{ display:"flex", justifyContent:"space-between" }}>
+                      <span>% Tiempo activo</span>
+                      <span style={{ fontFamily:"'Space Mono',monospace", color:"#f7c97c" }}>{activeTime}%</span>
+                    </label>
+                    <div className="input" style={{ display:"flex", alignItems:"center", gap:6, padding:"0 12px" }}>
+                      <input type="range" min="10" max="100" value={activeTime} onChange={e => { setActiveTime(e.target.value); saveSettings("pq_active_time", e.target.value); }} style={{ flex:1, accentColor:"#f7c97c", cursor:"pointer" }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label" style={{ display:"flex", justifyContent:"space-between" }}>
+                      <span>Factor búfer</span>
+                      <span style={{ fontFamily:"'Space Mono',monospace", color:"#f7c97c" }}>{parseFloat(bufferFactor).toFixed(1)}×</span>
+                    </label>
+                    <div className="input" style={{ display:"flex", alignItems:"center", gap:6, padding:"0 12px" }}>
+                      <input type="range" min="1" max="2" step="0.1" value={bufferFactor} onChange={e => { setBufferFactor(e.target.value); saveSettings("pq_buffer", e.target.value); }} style={{ flex:1, accentColor:"#f7c97c", cursor:"pointer" }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Labor */}
+                <div style={{ fontSize:11, fontWeight:700, color:"#4a4a6a", textTransform:"uppercase", letterSpacing:".06em", borderBottom:"1px solid #1e1e2e", paddingBottom:6, marginTop:4 }}>👷 Mano de obra</div>
+                <div>
+                  <label className="label" style={{ display:"flex", justifyContent:"space-between" }}>
+                    <span>Tarifa por hora ($/hr)</span>
+                    <span style={{ fontSize:11, color:"#6c6c8a" }}>{parseFloat(laborRate)===0 ? "No aplica (hobby)" : fmt(parseFloat(laborRate)*totalHours) + " total"}</span>
+                  </label>
+                  <input className="input" type="number" inputMode="decimal" min="0" placeholder="0 = no cobrar mano de obra" value={laborRate} onChange={e => { setLaborRate(e.target.value); saveSettings("pq_labor", e.target.value); }} />
+                </div>
+
               </div>
             </details>
           </div>
@@ -470,12 +547,14 @@
                 <Icon name="zap" size={16} /><span style={{ fontWeight:700, fontSize:15 }}>Costos{qtyNum > 1 ? ` (×${qtyNum} piezas)` : ""}</span>
               </div>
               <p style={{ fontSize:12, color:"#6c6c8a", marginBottom:20 }}>Desglose de la pieza actual</p>
-              {qtyNum > 1 && <Row label="Costo unitario filamento" value={fmt(filamentCost)} />}
-              {qtyNum > 1 && <Row label="Costo unitario energía" value={fmt(energyCost)} />}
-              <Row label={qtyNum>1?"Costo real unitario":"Costo de filamento"} value={fmt(qtyNum>1?unitRealCost:filamentCost)} />
-              {qtyNum === 1 && <Row label="Costo de energía eléctrica" value={fmt(energyCost)} />}
-              {qtyNum === 1 && <Row label={`Merma aplicada (${waste}%)`} value={fmt((filamentCost+energyCost)*(parseFloat(waste)/100))} />}
-              <Row label={qtyNum>1?`Costo real total (×${qtyNum})`:"Costo real total"} value={fmt(realCost)} accent="#a78bfa" />
+              <Row label="Filamento" value={fmt(filamentCost)} />
+              <Row label="Energía eléctrica" value={fmt(energyCost)} />
+              {machineCost > 0 && <Row label={`Desgaste impresora (${fmt(machineHrCost)}/hr)`} value={fmt(machineCost)} />}
+              {laborCost > 0 && <Row label={`Mano de obra (${fmt(parseFloat(laborRate))}/hr)`} value={fmt(laborCost)} />}
+              <Row label={`Merma (${waste}%)`} value={fmt((filamentCost+energyCost+machineCost+laborCost)*(parseFloat(waste)/100))} />
+              <Row label={qtyNum>1?`Costo unitario real`:"Costo real unitario"} value={fmt(unitRealCost)} />
+              {qtyNum > 1 && <Row label={`Costo real total (×${qtyNum})`} value={fmt(realCost)} accent="#a78bfa" />}
+              {qtyNum === 1 && <Row label="Costo real total" value={fmt(realCost)} accent="#a78bfa" />}
 
               {/* Multiplier / sale price */}
               <div style={{ marginTop:24, background:"#1a1a2e", borderRadius:12, padding:20 }}>
